@@ -5,6 +5,7 @@ import com.blog.blogplatform.dto.PostRequest;
 import com.blog.blogplatform.dto.UpdatePostRequest;
 import com.blog.blogplatform.entity.Comment;
 import com.blog.blogplatform.entity.Post;
+import com.blog.blogplatform.security.JwtUtil;
 import com.blog.blogplatform.service.PostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -16,11 +17,15 @@ import java.util.List;
 public class PostController {
 
     private final PostService postService;
+    private final JwtUtil jwtUtil;
 
     @PostMapping("/create")
-    public Post createPost(@RequestBody PostRequest request) {
-
-        String email = "kshitij@gmail.com"; // temporary
+    public Post createPost(
+            @RequestBody PostRequest request,
+            @RequestHeader("Authorization") String authHeader
+    ) {
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
 
         return postService.createPost(
                 request.getTitle(),
@@ -48,9 +53,13 @@ public class PostController {
     @PostMapping("/{id}/comment")
     public Comment addComment(
             @PathVariable Long id,
-            @RequestBody CommentRequest request
+            @RequestBody CommentRequest request,
+            @RequestHeader("Authorization") String authHeader
     ) {
-        return postService.addComment(id, request.getContent());
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
+        
+        return postService.addComment(id, request.getContent(), email);
     }
 
     @GetMapping("/{id}/comments")

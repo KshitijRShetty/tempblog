@@ -52,12 +52,12 @@ public class PostService {
         return postRepository.save(post);
     }
 
-    public Comment addComment(Long postId, String content) {
+    public Comment addComment(Long postId, String content, String email) {
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
-        User user = userRepository.findByEmail("kshitij@gmail.com")
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Comment comment = Comment.builder()

@@ -8,6 +8,8 @@ import com.blog.blogplatform.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -16,6 +18,11 @@ public class AuthService {
     private final JwtUtil jwtUtil;
 
     public String register(RegisterRequest request) {
+
+        // Check if email already exists
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new RuntimeException("Email already exists");
+        }
 
         User user = User.builder()
                 .name(request.getName())
@@ -39,6 +46,6 @@ public class AuthService {
             throw new RuntimeException("Invalid password");
         }
 
-        return jwtUtil.generateToken(user.getEmail());
+        return jwtUtil.generateToken(user.getEmail(), user.getName(), user.getRole(), new Date());
     }
 }
