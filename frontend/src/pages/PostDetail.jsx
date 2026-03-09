@@ -4,12 +4,14 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Heart, ArrowLeft, Loader2 } from 'lucide-react'
 import api from '../api/axios'
 import CommentSection from '../components/CommentSection'
+import ImageCarousel from '../components/ImageCarousel'
 import { useAuth } from '../context/AuthContext'
 
 const PostDetail = () => {
   const [post, setPost] = useState(null)
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [isLiked, setIsLiked] = useState(false)
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
@@ -18,6 +20,12 @@ const PostDetail = () => {
     fetchPost()
     fetchComments()
   }, [id])
+
+  useEffect(() => {
+    if (isAuthenticated && post) {
+      checkLikedStatus()
+    }
+  }, [isAuthenticated, post?.id])
 
   const getImageUrl = (url) => {
     if (!url) return null
@@ -50,10 +58,20 @@ const PostDetail = () => {
     }
   }
 
+  const checkLikedStatus = async () => {
+    try {
+      const response = await api.get(`/posts/${id}/liked`)
+      setIsLiked(response.data.liked)
+    } catch (error) {
+      console.log('Error checking like status:', error)
+    }
+  }
+
   const handleLike = async () => {
     try {
       const response = await api.post(`/posts/${id}/like`)
-      setPost(response.data)
+      setPost(response.data.post)
+      setIsLiked(response.data.liked)
     } catch (error) {
       console.error('Error liking post:', error)
       alert('Failed to like post. Please login.')
@@ -110,13 +128,9 @@ const PostDetail = () => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-black/40 backdrop-blur-md border border-purple-500/30 rounded-2xl overflow-hidden"
       >
-        {post.imageUrl && (
-          <div className="w-full bg-black/20 flex items-center justify-center">
-            <img 
-              src={getImageUrl(post.imageUrl)} 
-              alt={post.title}
-              className="w-full max-h-[600px] object-contain"
-            />
+        {post.imageUrls && post.imageUrls.length > 0 && (
+          <div className="w-full h-[600px]">
+            <ImageCarousel images={post.imageUrls} alt={post.title} />
           </div>
         )}
 
@@ -144,10 +158,14 @@ const PostDetail = () => {
             whileTap={{ scale: 0.95 }}
             onClick={handleLike}
             disabled={!isAuthenticated}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg text-white font-semibold hover:shadow-lg hover:shadow-pink-500/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`flex items-center space-x-2 px-6 py-3 bg-gradient-to-r rounded-lg text-white font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
+              isLiked 
+                ? 'from-pink-600 to-purple-700 hover:shadow-pink-600/50' 
+                : 'from-pink-500 to-purple-600 hover:shadow-pink-500/50'
+            }`}
           >
-            <Heart size={20} />
-            <span>{post.likes || 0} Likes</span>
+            <Heart size={20} fill={isLiked ? 'currentColor' : 'none'} />
+            <span>{post.likes || 0} {isLiked ? 'Liked' : 'Likes'}</span>
           </motion.button>
 
           <div className="mt-8">

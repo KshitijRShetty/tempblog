@@ -12,7 +12,8 @@ import java.util.Map;
 @Component
 public class JwtUtil {
 
-    private final String SECRET = "mysecretkeymysecretkeymysecretkey";
+    // Secure 512-bit (64 characters) secret key for HS512 algorithm
+    private final String SECRET = "mysecretkeymysecretkeymysecretkeymysecretkeymysecretkeymysecretkey1234";
 
     private final Key key = Keys.hmacShaKeyFor(SECRET.getBytes());
 

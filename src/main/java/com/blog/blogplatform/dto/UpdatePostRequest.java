@@ -1,12 +1,13 @@
 package com.blog.blogplatform.dto;
 
 import lombok.Data;
+import java.util.List;
 
 @Data
 public class UpdatePostRequest {
 
     private String title;
     private String content;
-    private String imageUrl;
+    private List<String> imageUrls;
 
 }

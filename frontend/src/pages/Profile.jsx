@@ -9,6 +9,7 @@ const Profile = () => {
   const { user } = useAuth()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [likedPosts, setLikedPosts] = useState(new Set())
   const [stats, setStats] = useState({
     totalPosts: 0,
     totalLikes: 0,
@@ -18,6 +19,12 @@ const Profile = () => {
   useEffect(() => {
     fetchUserPosts()
   }, [])
+
+  useEffect(() => {
+    if (posts.length > 0) {
+      checkLikedPosts()
+    }
+  }, [posts.length])
 
   const fetchUserPosts = async () => {
     try {
@@ -39,11 +46,48 @@ const Profile = () => {
     }
   }
 
+  const checkLikedPosts = async () => {
+    try {
+      const likedSet = new Set()
+      for (const post of posts) {
+        try {
+          const response = await api.get(`/posts/${post.id}/liked`)
+          if (response.data.liked) {
+            likedSet.add(post.id)
+          }
+        } catch (error) {
+          console.log('Error checking like status:', error)
+        }
+      }
+      setLikedPosts(likedSet)
+    } catch (error) {
+      console.error('Error checking liked posts:', error)
+    }
+  }
+
   const handleLike = async (postId) => {
     try {
-      await api.post(`/posts/${postId}/like`)
-      // Refresh posts to update like count
-      fetchUserPosts()
+      const response = await api.post(`/posts/${postId}/like`)
+      // Update the specific post
+      setPosts(posts.map(post => 
+        post.id === postId ? response.data.post : post
+      ))
+      
+      // Update liked status
+      const newLikedPosts = new Set(likedPosts)
+      if (response.data.liked) {
+        newLikedPosts.add(postId)
+      } else {
+        newLikedPosts.delete(postId)
+      }
+      setLikedPosts(newLikedPosts)
+      
+      // Recalculate stats
+      const updatedPosts = posts.map(post => 
+        post.id === postId ? response.data.post : post
+      )
+      const totalLikes = updatedPosts.reduce((sum, post) => sum + (post.likes || 0), 0)
+      setStats(prev => ({ ...prev, totalLikes }))
     } catch (error) {
       console.error('Error liking post:', error)
     }
@@ -63,6 +107,10 @@ const Profile = () => {
       console.error('Error deleting post:', error)
       alert('Failed to delete post')
     }
+  }
+
+  const handleExternalClick = (url) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   if (loading) {
@@ -175,7 +223,7 @@ const Profile = () => {
             <p className="text-gray-500">Start sharing your thoughts by creating your first post!</p>
           </motion.div>
         ) : (
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {posts.map((post, index) => (
               <motion.div
                 key={post.id}
@@ -187,7 +235,9 @@ const Profile = () => {
                   post={post} 
                   onLike={handleLike}
                   onDelete={handleDelete}
+                  onExternalClick={handleExternalClick}
                   showActions={true}
+                  isLiked={likedPosts.has(post.id)}
                 />
               </motion.div>
             ))}

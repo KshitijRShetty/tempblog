@@ -9,7 +9,9 @@ import com.blog.blogplatform.security.JwtUtil;
 import com.blog.blogplatform.service.PostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -27,10 +29,16 @@ public class PostController {
         String token = authHeader.substring(7); // Remove "Bearer " prefix
         String email = jwtUtil.extractEmail(token);
 
+        // Ensure imageUrls is never null
+        List<String> imageUrls = request.getImageUrls();
+        if (imageUrls == null) {
+            imageUrls = new ArrayList<>();
+        }
+
         return postService.createPost(
                 request.getTitle(),
                 request.getContent(),
-                request.getImageUrl(),
+                imageUrls,
                 email
         );
     }
@@ -40,9 +48,35 @@ public class PostController {
         return postService.getAllPosts();
     }
 
+    @GetMapping("/feed")
+    public List<Map<String, Object>> getFeed() {
+        return postService.getFeed();
+    }
+
+    @GetMapping("/search")
+    public List<Post> searchPosts(@RequestParam(required = false) String keyword) {
+        return postService.searchPosts(keyword);
+    }
+
     @PostMapping("/{id}/like")
-    public Post likePost(@PathVariable Long id) {
-        return postService.likePost(id);
+    public Map<String, Object> toggleLike(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String authHeader
+    ) {
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
+        return postService.toggleLike(id, email);
+    }
+
+    @GetMapping("/{id}/liked")
+    public Map<String, Boolean> hasUserLikedPost(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String authHeader
+    ) {
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
+        boolean liked = postService.hasUserLikedPost(id, email);
+        return Map.of("liked", liked);
     }
 
     @DeleteMapping("/{id}")
