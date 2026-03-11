@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import PostCard from '../components/PostCard'
+import PostCardSkeleton from '../components/PostCardSkeleton'
 import api from '../api/axios'
 import { Loader2, Search, RefreshCw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +17,9 @@ const Home = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const { isAuthenticated } = useAuth()
+  
+  // Fixed grid size for stable layout
+  const SKELETON_COUNT = 9
 
   useEffect(() => {
     fetchPosts()
@@ -189,8 +193,26 @@ const Home = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="animate-spin text-purple-500" size={48} />
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-400 via-pink-500 to-purple-600 text-transparent bg-clip-text mb-4">
+            Welcome to FutureBlog
+          </h1>
+          <p className="text-xl text-gray-300 mb-4">
+            Share your thoughts with the world
+          </p>
+        </motion.div>
+
+        {/* Loading Skeleton Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(SKELETON_COUNT)].map((_, index) => (
+            <PostCardSkeleton key={index} index={index} />
+          ))}
+        </div>
       </div>
     )
   }
@@ -275,15 +297,15 @@ const Home = () => {
         </div>
       </motion.form>
 
-      {posts.length === 0 ? (
+      {posts.length === 0 && !loading && hasSearched ? (
         <div className="text-center py-12">
           <p className="text-xl text-gray-400">
-            {searchKeyword ? 'No posts found matching your search.' : 'No posts yet. Be the first to create one!'}
+            No posts found matching your search.
           </p>
         </div>
       ) : (
         <>
-          {hasSearched && searchKeyword && (
+          {hasSearched && searchKeyword && posts.length > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
