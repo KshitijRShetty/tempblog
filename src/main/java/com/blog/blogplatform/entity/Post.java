@@ -23,7 +23,11 @@ public class Post {
     @Column(length = 5000)
     private String content;
 
-    private String imageUrl;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "post_images", joinColumns = @JoinColumn(name = "post_id"))
+    @Column(name = "image_url")
+    @Builder.Default
+    private List<String> imageUrls = new ArrayList<>();
 
     private int likes;
 
@@ -34,5 +38,6 @@ public class Post {
     private User user;
 
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Comment> comments = new ArrayList<>();
 }

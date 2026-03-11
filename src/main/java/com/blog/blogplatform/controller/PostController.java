@@ -5,10 +5,13 @@ import com.blog.blogplatform.dto.PostRequest;
 import com.blog.blogplatform.dto.UpdatePostRequest;
 import com.blog.blogplatform.entity.Comment;
 import com.blog.blogplatform.entity.Post;
+import com.blog.blogplatform.security.JwtUtil;
 import com.blog.blogplatform.service.PostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -16,16 +19,26 @@ import java.util.List;
 public class PostController {
 
     private final PostService postService;
+    private final JwtUtil jwtUtil;
 
     @PostMapping("/create")
-    public Post createPost(@RequestBody PostRequest request) {
+    public Post createPost(
+            @RequestBody PostRequest request,
+            @RequestHeader("Authorization") String authHeader
+    ) {
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
 
-        String email = "kshitij@gmail.com"; // temporary
+        // Ensure imageUrls is never null
+        List<String> imageUrls = request.getImageUrls();
+        if (imageUrls == null) {
+            imageUrls = new ArrayList<>();
+        }
 
         return postService.createPost(
                 request.getTitle(),
                 request.getContent(),
-                request.getImageUrl(),
+                imageUrls,
                 email
         );
     }
@@ -35,9 +48,35 @@ public class PostController {
         return postService.getAllPosts();
     }
 
+    @GetMapping("/feed")
+    public List<Map<String, Object>> getFeed() {
+        return postService.getFeed();
+    }
+
+    @GetMapping("/search")
+    public List<Post> searchPosts(@RequestParam(required = false) String keyword) {
+        return postService.searchPosts(keyword);
+    }
+
     @PostMapping("/{id}/like")
-    public Post likePost(@PathVariable Long id) {
-        return postService.likePost(id);
+    public Map<String, Object> toggleLike(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String authHeader
+    ) {
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
+        return postService.toggleLike(id, email);
+    }
+
+    @GetMapping("/{id}/liked")
+    public Map<String, Boolean> hasUserLikedPost(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String authHeader
+    ) {
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
+        boolean liked = postService.hasUserLikedPost(id, email);
+        return Map.of("liked", liked);
     }
 
     @DeleteMapping("/{id}")
@@ -48,9 +87,13 @@ public class PostController {
     @PostMapping("/{id}/comment")
     public Comment addComment(
             @PathVariable Long id,
-            @RequestBody CommentRequest request
+            @RequestBody CommentRequest request,
+            @RequestHeader("Authorization") String authHeader
     ) {
-        return postService.addComment(id, request.getContent());
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        String email = jwtUtil.extractEmail(token);
+        
+        return postService.addComment(id, request.getContent(), email);
     }
 
     @GetMapping("/{id}/comments")
