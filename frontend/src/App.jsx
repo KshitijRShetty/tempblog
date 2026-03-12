@@ -8,7 +8,10 @@ import CreatePost from './pages/CreatePost'
 import EditPost from './pages/EditPost'
 import PostDetail from './pages/PostDetail'
 import Profile from './pages/Profile'
+import PublicProfile from './pages/PublicProfile'
 import AdminDashboard from './pages/AdminDashboard'
+import BlogPreview from './pages/BlogPreview'
+import Bookmarks from './pages/Bookmarks'
 
 function App() {
   const { isAuthenticated, user } = useAuth()
@@ -22,6 +25,9 @@ function App() {
           <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
           <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" />} />
           <Route path="/post/:id" element={<PostDetail />} />
+          <Route path="/preview/:id" element={<BlogPreview />} />
+          <Route path="/bookmarks" element={<Bookmarks />} />
+          <Route path="/users/:email" element={<PublicProfile />} />
           <Route 
             path="/create" 
             element={isAuthenticated ? <CreatePost /> : <Navigate to="/login" />} 

@@ -3,6 +3,7 @@ package com.blog.blogplatform.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Data
@@ -27,4 +28,20 @@ public class User {
     private String role;
 
     private boolean banned;
+
+    private String profileImage;
+
+    @Column(columnDefinition = "TEXT")
+    private String bio;
+
+    @Column(columnDefinition = "TEXT")
+    private String interests;
+
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+    }
 }

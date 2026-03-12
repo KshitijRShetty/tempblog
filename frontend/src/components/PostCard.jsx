@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Heart, MessageCircle, Edit, Trash2, ExternalLink } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Heart, MessageCircle, Edit, Trash2, ExternalLink, Bookmark } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import ConfirmModal from './ConfirmModal'
 import ImageCarousel from './ImageCarousel'
 
-const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false, isLiked = false }) => {
+const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false, isLiked = false, onBookmark, isBookmarked = false }) => {
   const { isAuthenticated, user } = useAuth()
+  const navigate = useNavigate()
   const isOwner = user?.email === post.user?.email
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const isExternal = post.external === true
@@ -50,6 +51,17 @@ const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false
     return title?.charAt(0).toUpperCase() || 'P'
   }
 
+  // Get source badge styling
+  const getSourceBadge = (source, sourceLabel) => {
+    const badges = {
+      'devto': { color: 'from-cyan-500/20 to-blue-500/20', border: 'border-cyan-500/30', text: 'text-cyan-300', icon: '🌐' },
+      'hackernews': { color: 'from-orange-500/20 to-red-500/20', border: 'border-orange-500/30', text: 'text-orange-300', icon: '📰' },
+      'rss': { color: 'from-green-500/20 to-emerald-500/20', border: 'border-green-500/30', text: 'text-green-300', icon: '📡' },
+      'local': { color: 'from-purple-500/20 to-pink-500/20', border: 'border-purple-500/30', text: 'text-purple-300', icon: '✍️' }
+    }
+    return badges[source] || badges['rss']
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -76,38 +88,84 @@ const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false
             </div>
           </div>
         )}
+        
+        {/* Bookmark Button Overlay */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={(e) => {
+            e.stopPropagation()
+            onBookmark && onBookmark(post)
+          }}
+          className={`absolute top-3 right-3 z-20 p-2 backdrop-blur-md rounded-lg transition-all ${
+            isBookmarked 
+              ? 'bg-yellow-500/90 text-white shadow-lg shadow-yellow-500/50' 
+              : 'bg-black/50 text-gray-300 hover:bg-black/70'
+          }`}
+          title={isBookmarked ? "Remove from bookmarks" : "Add to bookmarks"}
+        >
+          <Bookmark size={20} fill={isBookmarked ? 'currentColor' : 'none'} />
+        </motion.button>
       </div>
       
       {/* Fixed Content Area */}
       <div className="p-6 flex flex-col flex-1 min-h-0">
+        {/* Source Badge */}
+        {post.source && (
+          <div className="inline-block mb-2">
+            <span className={`px-2 py-1 bg-gradient-to-r ${getSourceBadge(post.source).color} border ${getSourceBadge(post.source).border} rounded-md text-xs ${getSourceBadge(post.source).text} flex items-center gap-1 w-fit`}>
+              {getSourceBadge(post.source).icon} {post.sourceLabel || post.source}
+            </span>
+          </div>
+        )}
+        
         {isExternal ? (
-          <div onClick={() => onExternalClick && onExternalClick(post.url)} className="cursor-pointer">
+          <div onClick={() => navigate(`/preview/${post.id || post.url}`, { state: { post } })} className="cursor-pointer">
             <div className="flex items-center gap-2 mb-2">
               <h2 className="text-xl font-bold text-white hover:text-purple-400 transition line-clamp-2 h-14 flex-1">
-                {post.title}
+                {post.title || 'Untitled Post'}
               </h2>
               <ExternalLink size={16} className="text-cyan-400 flex-shrink-0" />
-            </div>
-            <div className="inline-block mb-2">
-              <span className="px-2 py-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-md text-xs text-cyan-300 flex items-center gap-1">
-                🌐 Dev.to Article
-              </span>
             </div>
           </div>
         ) : (
           <Link to={`/post/${post.id}`}>
             <h2 className="text-xl font-bold text-white mb-2 hover:text-purple-400 transition cursor-pointer line-clamp-2 h-14">
-              {post.title}
+              {post.title || 'Untitled Post'}
             </h2>
           </Link>
         )}
         
         <p className="text-gray-300 mb-4 line-clamp-3 flex-1 overflow-hidden">
-          {post.content}
+          {post.content || (isExternal ? 'Click to read this article on Dev.to' : 'No content available')}
         </p>
 
+        {/* Tags Display */}
+        {post.tags && post.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {post.tags.slice(0, 5).map((tag, index) => (
+              <span
+                key={index}
+                className="px-2 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-full text-xs text-purple-300"
+              >
+                #{tag}
+              </span>
+            ))}
+            {post.tags.length > 5 && (
+              <span className="px-2 py-1 text-xs text-gray-400">
+                +{post.tags.length - 5} more
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-sm text-gray-400 mb-4">
-          <span className="truncate mr-2">By {post.user?.name || 'Anonymous'}</span>
+          <span 
+            onClick={() => post.user?.email && navigate(`/users/${post.user.email}`)}
+            className={`truncate mr-2 ${post.user?.email ? 'cursor-pointer hover:text-purple-400 transition-colors' : ''}`}
+          >
+            By {post.user?.name || 'Anonymous'}
+          </span>
           <span className="flex-shrink-0">{formatDate(post.createdAt)}</span>
         </div>
 
@@ -131,11 +189,11 @@ const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={() => onExternalClick && onExternalClick(post.url)}
+                onClick={() => navigate(`/preview/${post.id || post.url}`, { state: { post } })}
                 className="flex items-center space-x-2 text-cyan-400 hover:text-cyan-300"
               >
                 <ExternalLink size={20} />
-                <span>View on Dev.to</span>
+                <span>Preview</span>
               </motion.button>
             ) : (
               <Link to={`/post/${post.id}`}>

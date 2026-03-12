@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import PostCard from '../components/PostCard'
 import PostCardSkeleton from '../components/PostCardSkeleton'
+import NotificationModal from '../components/NotificationModal'
 import api from '../api/axios'
 import { Loader2, Search, RefreshCw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import useBookmarks from '../hooks/useBookmarks'
 
 const Home = () => {
   const [posts, setPosts] = useState([])
   const [allPosts, setAllPosts] = useState([]) // Store all posts for filtering
+  const [trendingPosts, setTrendingPosts] = useState([])
+  const [loadingTrending, setLoadingTrending] = useState(true)
   const [loading, setLoading] = useState(true)
   const [likedPosts, setLikedPosts] = useState(new Set())
   const [searchKeyword, setSearchKeyword] = useState('')
@@ -17,16 +21,35 @@ const Home = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const { isAuthenticated } = useAuth()
+  const { toggleBookmark, isBookmarked } = useBookmarks()
+  
+  // Notification modal state
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'success'
+  })
+
+  const showNotification = (title, message, type = 'success') => {
+    setNotification({ isOpen: true, title, message, type })
+  }
+
+  const closeNotification = () => {
+    setNotification({ ...notification, isOpen: false })
+  }
   
   // Fixed grid size for stable layout
   const SKELETON_COUNT = 9
 
   useEffect(() => {
     fetchPosts()
+    fetchTrendingPosts()
     
     // Auto-refresh every 5 minutes (300000ms)
     const refreshInterval = setInterval(() => {
       fetchPosts(true) // Pass true for silent refresh
+      fetchTrendingPosts(true)
     }, 300000)
     
     return () => clearInterval(refreshInterval)
@@ -55,10 +78,24 @@ const Home = () => {
     }
   }
 
+  const fetchTrendingPosts = async (silent = false) => {
+    try {
+      if (!silent) setLoadingTrending(true)
+      
+      const response = await api.get('/posts/trending')
+      setTrendingPosts(response.data)
+    } catch (error) {
+      console.error('Error fetching trending posts:', error)
+    } finally {
+      setLoadingTrending(false)
+    }
+  }
+
   const handleRefresh = () => {
     setSearchKeyword('') // Clear search on refresh
     setHasSearched(false)
     fetchPosts()
+    fetchTrendingPosts()
     if (isAuthenticated && posts.length > 0) {
       checkLikedPosts()
     }
@@ -112,9 +149,12 @@ const Home = () => {
     try {
       await api.delete(`/posts/${postId}`)
       setPosts(posts.filter(post => post.id !== postId))
+      setAllPosts(allPosts.filter(post => post.id !== postId))
+      showNotification('Success!', 'Post deleted successfully', 'success')
     } catch (error) {
       console.error('Error deleting post:', error)
-      alert('Failed to delete post')
+      const errorMessage = error.response?.data?.message || error.response?.data || 'Failed to delete post'
+      showNotification('Delete Failed', errorMessage, 'error')
     }
   }
 
@@ -297,10 +337,128 @@ const Home = () => {
         </div>
       </motion.form>
 
+      {/* Trending Blogs Section */}
+      {!loadingTrending && trendingPosts.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mb-12"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-3xl">🔥</span>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-orange-400 via-red-500 to-pink-600 text-transparent bg-clip-text">
+              Trending Now
+            </h2>
+          </div>
+          
+          {/* Horizontal Scroll Container */}
+          <div className="relative">
+            <div className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-purple-500/50 scrollbar-track-transparent">
+              <div className="flex gap-6 min-w-max">
+                {trendingPosts.map((post, index) => (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="w-96 flex-shrink-0"
+                  >
+                    <div className="relative h-full">
+                      {/* Glow Effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 via-red-500/20 to-pink-500/20 rounded-2xl blur-xl"></div>
+                      
+                      {/* Card */}
+                      <div className="relative bg-gradient-to-br from-gray-900/90 to-black/90 backdrop-blur-md border-2 border-orange-500/30 rounded-2xl p-6 h-full hover:border-orange-500/60 transition-all duration-300 hover:shadow-2xl hover:shadow-orange-500/20">
+                        {/* Trending Badge */}
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold rounded-full">
+                            #{index + 1} TRENDING
+                          </span>
+                          {post.trendingScore && (
+                            <span className="text-xs text-gray-400">
+                              Score: {post.trendingScore.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Image */}
+                        {post.imageUrls && post.imageUrls.length > 0 && (
+                          <img
+                            src={post.imageUrls[0]}
+                            alt={post.title}
+                            className="w-full h-48 object-cover rounded-lg mb-4"
+                          />
+                        )}
+
+                        {/* Title */}
+                        <h3 className="text-xl font-bold text-white mb-3 line-clamp-2">
+                          {post.title}
+                        </h3>
+
+                        {/* Content Preview */}
+                        <p className="text-gray-300 text-sm mb-4 line-clamp-3">
+                          {post.content}
+                        </p>
+
+                        {/* Author & Stats */}
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
+                              {post.user?.name?.charAt(0) || 'A'}
+                            </div>
+                            <span className="text-gray-300">{post.user?.name || 'Anonymous'}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-4 text-gray-400">
+                            <span className="flex items-center gap-1">
+                              ❤️ {post.likes || 0}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              💬 {post.comments?.length || 0}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* External Link or View Button */}
+                        {post.external ? (
+                          <button
+                            onClick={() => handleExternalClick(post.url)}
+                            className="mt-4 w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/50"
+                          >
+                            Read on {post.sourceLabel || 'External Site'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => window.location.href = `/post/${post.id}`}
+                            className="mt-4 w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/50"
+                          >
+                            Read Full Post
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Scroll Hint */}
+            <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-gray-950 to-transparent pointer-events-none"></div>
+          </div>
+        </motion.div>
+      )}
+
       {posts.length === 0 && !loading && hasSearched ? (
         <div className="text-center py-12">
           <p className="text-xl text-gray-400">
             No posts found matching your search.
+          </p>
+        </div>
+      ) : posts.length === 0 && !loading ? (
+        <div className="text-center py-12">
+          <p className="text-xl text-gray-400">
+            No posts yet. Be the first to create one!
           </p>
         </div>
       ) : (
@@ -318,20 +476,55 @@ const Home = () => {
           )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {posts.map((post, index) => (
+            {/* Always render SKELETON_COUNT slots */}
+            {[...Array(SKELETON_COUNT)].map((_, index) => {
+              const post = posts[index]
+              
+              if (post) {
+                // Render actual post card
+                return (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <PostCard 
+                      post={post} 
+                      onLike={handleLike}
+                      onDelete={handleDelete}
+                      onExternalClick={handleExternalClick}
+                      onBookmark={toggleBookmark}
+                      showActions={true}
+                      isLiked={likedPosts.has(post.id)}
+                      isBookmarked={isBookmarked(post.id)}
+                      isExternal={post.external}
+                    />
+                  </motion.div>
+                )
+              } else {
+                // Render skeleton for empty slots
+                return <PostCardSkeleton key={`skeleton-${index}`} index={index} />
+              }
+            })}
+            
+            {/* Render additional posts beyond SKELETON_COUNT */}
+            {posts.length > SKELETON_COUNT && posts.slice(SKELETON_COUNT).map((post, index) => (
               <motion.div
                 key={post.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+                transition={{ delay: (SKELETON_COUNT + index) * 0.1 }}
               >
                 <PostCard 
                   post={post} 
                   onLike={handleLike}
                   onDelete={handleDelete}
                   onExternalClick={handleExternalClick}
-                  showActions={false}
+                  onBookmark={toggleBookmark}
+                  showActions={true}
                   isLiked={likedPosts.has(post.id)}
+                  isBookmarked={isBookmarked(post.id)}
                   isExternal={post.external}
                 />
               </motion.div>
@@ -339,6 +532,15 @@ const Home = () => {
           </div>
         </>
       )}
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notification.isOpen}
+        onClose={closeNotification}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+      />
     </div>
   )
 }
