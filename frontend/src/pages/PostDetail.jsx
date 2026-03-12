@@ -5,6 +5,7 @@ import { Heart, ArrowLeft, Loader2 } from 'lucide-react'
 import api from '../api/axios'
 import CommentSection from '../components/CommentSection'
 import ImageCarousel from '../components/ImageCarousel'
+import PostDetailSkeleton from '../components/PostDetailSkeleton'
 import { useAuth } from '../context/AuthContext'
 
 const PostDetail = () => {
@@ -94,11 +95,7 @@ const PostDetail = () => {
   }
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="animate-spin text-purple-500" size={48} />
-      </div>
-    )
+    return <PostDetailSkeleton />
   }
 
   if (!post) {
@@ -141,7 +138,10 @@ const PostDetail = () => {
 
           <div className="flex items-center justify-between text-gray-400 mb-6 pb-6 border-b border-purple-500/30">
             <div>
-              <span className="text-purple-400 font-semibold">
+              <span 
+                onClick={() => post.user?.email && navigate(`/users/${post.user.email}`)}
+                className={`text-purple-400 font-semibold ${post.user?.email ? 'cursor-pointer hover:text-purple-300 transition-colors' : ''}`}
+              >
                 {post.user?.name || 'Anonymous'}
               </span>
               <span className="mx-2">•</span>

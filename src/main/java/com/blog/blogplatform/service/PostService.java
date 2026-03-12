@@ -10,15 +10,20 @@ import com.blog.blogplatform.repository.LikeRepository;
 import com.blog.blogplatform.repository.PostRepository;
 import com.blog.blogplatform.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,9 +33,9 @@ public class PostService {
     private final UserRepository userRepository;
     private final CommentRepository commentRepository;
     private final LikeRepository likeRepository;
-    private final ExternalBlogService externalBlogService;
+    private final BlogAggregatorService blogAggregatorService;
 
-    public Post createPost(String title, String content, List<String> imageUrls, String email) {
+    public Post createPost(String title, String content, List<String> imageUrls, List<String> tags, String email) {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -39,12 +44,15 @@ public class PostService {
                 .title(title)
                 .content(content)
                 .imageUrls(imageUrls != null ? imageUrls : new ArrayList<>())
+                .tags(tags != null ? tags : new ArrayList<>())
                 .likes(0)
                 .createdAt(LocalDateTime.now())
                 .user(user)
                 .build();
 
-        return postRepository.save(post);
+        @SuppressWarnings("null")
+        Post savedPost = postRepository.save(post);
+        return savedPost;
     }
 
     public List<Post> getAllPosts() {
@@ -73,12 +81,14 @@ public class PostService {
             }
             postMap.put("user", userMap);
             postMap.put("external", false);
+            postMap.put("source", "local");
+            postMap.put("sourceLabel", "Local Post");
             
             localPostMaps.add(postMap);
         }
         
-        // Get external blogs with random count (10-30 articles)
-        List<Map<String, Object>> externalBlogs = externalBlogService.fetchExternalBlogs();
+        // Get all external blogs from aggregator (Dev.to, HN, RSS)
+        List<Map<String, Object>> externalBlogs = blogAggregatorService.aggregateAllBlogs();
         
         // Merge both into a feed
         List<Map<String, Object>> feed = new ArrayList<>();
@@ -92,7 +102,8 @@ public class PostService {
     }
 
     @Transactional
-    public Map<String, Object> toggleLike(Long postId, String email) {
+    @SuppressWarnings("null")
+    public Map<String, Object> toggleLike(@NonNull Long postId, String email) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
@@ -104,7 +115,8 @@ public class PostService {
         boolean liked;
         if (existingLike.isPresent()) {
             // Unlike: remove the like
-            likeRepository.delete(existingLike.get());
+            Like likeToDelete = existingLike.get();
+            likeRepository.delete(likeToDelete);
             post.setLikes(Math.max(0, post.getLikes() - 1));
             liked = false;
         } else {
@@ -126,7 +138,7 @@ public class PostService {
         return response;
     }
 
-    public boolean hasUserLikedPost(Long postId, String email) {
+    public boolean hasUserLikedPost(@NonNull Long postId, String email) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
@@ -143,7 +155,7 @@ public class PostService {
         return postRepository.searchPosts(keyword.trim());
     }
 
-    public Comment addComment(Long postId, String content, String email) {
+    public Comment addComment(@NonNull Long postId, String content, String email) {
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
@@ -158,10 +170,12 @@ public class PostService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return commentRepository.save(comment);
+        @SuppressWarnings("null")
+        Comment savedComment = commentRepository.save(comment);
+        return savedComment;
     }
 
-    public List<Comment> getComments(Long postId) {
+    public List<Comment> getComments(@NonNull Long postId) {
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
@@ -169,25 +183,161 @@ public class PostService {
         return commentRepository.findByPost(post);
     }
     @Transactional
-    public String deletePost(Long postId) {
+    @SuppressWarnings("null")
+    public String deletePost(@NonNull Long postId, String email) {
+        // Get the user making the request
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // Check if user is banned
+        if (user.isBanned()) {
+            throw new RuntimeException("Cannot delete post: Your account has been banned");
+        }
+
+        // Get the post
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
+        // Check authorization: user must own the post or be an admin
+        if (!post.getUser().getEmail().equals(email) && !"ADMIN".equals(user.getRole())) {
+            throw new RuntimeException("You are not authorized to delete this post");
+        }
+
+        // Delete likes, comments, then the post
+        likeRepository.deleteByPost(post);
         commentRepository.deleteByPost(post);
         postRepository.delete(post);
 
         return "Post deleted successfully";
     }
-    public Post updatePost(Long id, UpdatePostRequest request) {
+    
+    // Admin delete - bypasses ownership check
+    @Transactional
+    @SuppressWarnings("null")
+    public String adminDeletePost(@NonNull Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found"));
+
+        likeRepository.deleteByPost(post);
+        commentRepository.deleteByPost(post);
+        postRepository.delete(post);
+
+        return "Post deleted successfully";
+    }
+    
+    public Post updatePost(@NonNull Long id, UpdatePostRequest request) {
         Post post = postRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Post not found"));
 
         post.setTitle(request.getTitle());
         post.setContent(request.getContent());
         post.setImageUrls(request.getImageUrls() != null ? request.getImageUrls() : new ArrayList<>());
+        post.setTags(request.getTags() != null ? request.getTags() : new ArrayList<>());
 
         return postRepository.save(post);
+    }
+    
+    /**
+     * Get trending blogs based on engagement scoring system
+     * Score formula: (reactions_count * 2 + comments_count * 3 + public_reactions_count) / hours_since_published
+     * Returns top 5 blogs sorted by score descending
+     */
+    public List<Map<String, Object>> getTrendingBlogs() {
+        List<Map<String, Object>> allBlogs = getFeed();
+        
+        // Calculate trending score for each blog
+        for (Map<String, Object> blog : allBlogs) {
+            double score = calculateTrendingScore(blog);
+            blog.put("trendingScore", score);
+        }
+        
+        // Sort by trending score descending and get top 5
+        return allBlogs.stream()
+                .sorted(Comparator.comparingDouble((Map<String, Object> blog) -> 
+                    ((Number) blog.getOrDefault("trendingScore", 0.0)).doubleValue())
+                    .reversed())
+                .limit(5)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Calculate trending score for a blog post
+     * Formula: (reactions_count * 2 + comments_count * 3 + public_reactions_count) / hours_since_published
+     */
+    private double calculateTrendingScore(Map<String, Object> blog) {
+        try {
+            // Get engagement metrics
+            int reactionsCount = 0;
+            int commentsCount = 0;
+            int publicReactionsCount = 0;
+            
+            // Get likes (reactions)
+            Object likesObj = blog.get("likes");
+            if (likesObj instanceof Number) {
+                reactionsCount = ((Number) likesObj).intValue();
+                publicReactionsCount = reactionsCount; // Use same value
+            }
+            
+            // Get comments count
+            Object commentsObj = blog.get("comments");
+            if (commentsObj instanceof List) {
+                commentsCount = ((List<?>) commentsObj).size();
+            }
+            
+            // Calculate hours since published
+            double hoursSincePublished = calculateHoursSincePublished(blog);
+            
+            // Avoid division by zero - use minimum of 1 hour
+            if (hoursSincePublished < 1) {
+                hoursSincePublished = 1;
+            }
+            
+            // Apply scoring formula
+            double engagementScore = (reactionsCount * 2.0) + (commentsCount * 3.0) + publicReactionsCount;
+            double trendingScore = engagementScore / hoursSincePublished;
+            
+            return trendingScore;
+        } catch (Exception e) {
+            // If any error in calculation, return 0
+            return 0.0;
+        }
+    }
+    
+    /**
+     * Calculate hours since a blog was published
+     */
+    private double calculateHoursSincePublished(Map<String, Object> blog) {
+        try {
+            Object createdAtObj = blog.get("createdAt");
+            
+            if (createdAtObj == null) {
+                return 24.0; // Default to 24 hours if no timestamp
+            }
+            
+            LocalDateTime createdAt = null;
+            
+            if (createdAtObj instanceof LocalDateTime) {
+                createdAt = (LocalDateTime) createdAtObj;
+            } else if (createdAtObj instanceof String) {
+                // Parse ISO 8601 date string (for external blogs)
+                try {
+                    ZonedDateTime zonedDateTime = ZonedDateTime.parse((String) createdAtObj);
+                    createdAt = zonedDateTime.toLocalDateTime();
+                } catch (Exception e) {
+                    // Fallback: try parsing as LocalDateTime directly
+                    createdAt = LocalDateTime.parse((String) createdAtObj);
+                }
+            }
+            
+            if (createdAt != null) {
+                long hours = ChronoUnit.HOURS.between(createdAt, LocalDateTime.now());
+                return Math.max(1, hours); // Minimum 1 hour
+            }
+            
+            return 24.0; // Default fallback
+        } catch (Exception e) {
+            return 24.0; // Default fallback on any error
+        }
     }
     
 }

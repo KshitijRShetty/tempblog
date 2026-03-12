@@ -17,6 +17,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
 
+    @SuppressWarnings("null")
     public String register(RegisterRequest request) {
 
         // Check if email already exists

@@ -2,6 +2,7 @@ package com.blog.blogplatform.service;
 
 import com.blog.blogplatform.repository.CommentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -10,7 +11,7 @@ public class CommentService {
 
     private final CommentRepository commentRepository;
 
-    public String deleteComment(Long id) {
+    public String deleteComment(@NonNull Long id) {
 
         commentRepository.deleteById(id);
 

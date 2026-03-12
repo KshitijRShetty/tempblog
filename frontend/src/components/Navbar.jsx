@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { motion } from 'framer-motion'
-import { PenLine, Home, Shield, LogOut, LogIn, UserPlus, User } from 'lucide-react'
+import { PenLine, Home, Shield, LogOut, LogIn, UserPlus, User, Bookmark } from 'lucide-react'
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth()
@@ -41,6 +41,17 @@ const Navbar = () => {
               >
                 <Home size={20} />
                 <span>Home</span>
+              </motion.button>
+            </Link>
+
+            <Link to="/bookmarks">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg text-yellow-400 hover:bg-yellow-500/20 transition"
+              >
+                <Bookmark size={20} />
+                <span>Bookmarks</span>
               </motion.button>
             </Link>
 

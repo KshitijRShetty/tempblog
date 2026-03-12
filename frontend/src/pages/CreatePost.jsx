@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { PenLine, Image as ImageIcon, Upload, X } from 'lucide-react'
+import { PenLine, Image as ImageIcon, Upload, X, Tag, Sparkles } from 'lucide-react'
 import api from '../api/axios'
 
 const CreatePost = () => {
@@ -9,6 +9,10 @@ const CreatePost = () => {
   const [content, setContent] = useState('')
   const [imageFiles, setImageFiles] = useState([])
   const [imagePreviews, setImagePreviews] = useState([])
+  const [tags, setTags] = useState([])
+  const [tagInput, setTagInput] = useState('')
+  const [suggestedTags, setSuggestedTags] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -92,6 +96,48 @@ const CreatePost = () => {
     setImagePreviews(prev => prev.filter((_, i) => i !== index))
   }
 
+  const fetchTagSuggestions = async () => {
+    if (!title && !content) {
+      setSuggestedTags([])
+      return
+    }
+
+    try {
+      const response = await api.post('/posts/suggest-tags', {
+        title,
+        content
+      })
+      setSuggestedTags(response.data.suggestions || [])
+      setShowSuggestions(true)
+    } catch (error) {
+      console.error('Error fetching tag suggestions:', error)
+    }
+  }
+
+  const addTag = (tag) => {
+    const cleanTag = tag.trim().toLowerCase()
+    if (cleanTag && !tags.includes(cleanTag) && tags.length < 10) {
+      setTags([...tags, cleanTag])
+      setTagInput('')
+      setShowSuggestions(false)
+    }
+  }
+
+  const removeTag = (tagToRemove) => {
+    setTags(tags.filter(tag => tag !== tagToRemove))
+  }
+
+  const handleTagInputKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (tagInput.trim()) {
+        addTag(tagInput)
+      }
+    } else if (e.key === 'Backspace' && !tagInput && tags.length > 0) {
+      removeTag(tags[tags.length - 1])
+    }
+  }
+
   const uploadImages = async () => {
     if (imageFiles.length === 0) return []
 
@@ -136,7 +182,8 @@ const CreatePost = () => {
       await api.post('/posts/create', {
         title,
         content,
-        imageUrls: imageUrls
+        imageUrls: imageUrls,
+        tags: tags
       })
       navigate('/')
     } catch (error) {
@@ -183,6 +230,104 @@ const CreatePost = () => {
               placeholder="Write your post content..."
               required
             />
+          </div>
+
+          {/* Tags Section */}
+          <div>
+            <label className="block text-gray-300 mb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Tag size={20} />
+                  <span>Tags (optional - up to 10)</span>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  type="button"
+                  onClick={fetchTagSuggestions}
+                  className="flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg text-xs text-white hover:shadow-lg hover:shadow-purple-500/50 transition"
+                >
+                  <Sparkles size={14} />
+                  <span>Suggest Tags</span>
+                </motion.button>
+              </div>
+            </label>
+
+            {/* Tag Display */}
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {tags.map((tag, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center space-x-2 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-full text-purple-300"
+                  >
+                    <span className="text-sm">#{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      className="hover:text-red-400 transition"
+                    >
+                      <X size={14} />
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {/* Tag Input */}
+            <div className="relative">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagInputKeyDown}
+                onFocus={() => suggestedTags.length > 0 && setShowSuggestions(true)}
+                className="w-full px-4 py-3 bg-black/40 border border-purple-500/30 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                placeholder="Type a tag and press Enter (e.g., javascript, tutorial, webdev)"
+                disabled={tags.length >= 10}
+              />
+              {tags.length >= 10 && (
+                <p className="text-xs text-yellow-400 mt-1">Maximum 10 tags reached</p>
+              )}
+
+              {/* Tag Suggestions Dropdown */}
+              {showSuggestions && suggestedTags.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="absolute z-10 w-full mt-2 p-2 bg-black/90 backdrop-blur-md border border-purple-500/30 rounded-lg shadow-xl"
+                >
+                  <div className="flex items-center justify-between mb-2 px-2">
+                    <span className="text-xs text-gray-400">Suggested Tags</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSuggestions(false)}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedTags
+                      .filter(tag => !tags.includes(tag))
+                      .map((tag, index) => (
+                        <motion.button
+                          key={index}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          type="button"
+                          onClick={() => addTag(tag)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-purple-500/30 to-pink-500/30 hover:from-purple-500/50 hover:to-pink-500/50 border border-purple-500/30 rounded-full text-sm text-purple-200 transition"
+                        >
+                          #{tag}
+                        </motion.button>
+                      ))}
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </div>
 
           <div>
