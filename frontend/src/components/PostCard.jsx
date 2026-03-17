@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Heart, MessageCircle, Edit, Trash2, ExternalLink, Bookmark } from 'lucide-react'
+import { Heart, MessageCircle, Edit, Trash2, ExternalLink, Bookmark, Share2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import ConfirmModal from './ConfirmModal'
@@ -11,6 +11,7 @@ const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false
   const navigate = useNavigate()
   const isOwner = user?.email === post.user?.email
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [shareFeedback, setShareFeedback] = useState('')
   const isExternal = post.external === true
 
   const formatDate = (dateString) => {
@@ -60,6 +61,43 @@ const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false
       'local': { color: 'from-purple-500/20 to-pink-500/20', border: 'border-purple-500/30', text: 'text-purple-300', icon: '✍️' }
     }
     return badges[source] || badges['rss']
+  }
+
+  const getShareUrl = () => {
+    if (isExternal && post.url) {
+      return post.url
+    }
+    return `${window.location.origin}/post/${post.id}`
+  }
+
+  const handleShare = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const shareUrl = getShareUrl()
+    const shareData = {
+      title: post.title || 'FutureBlog Post',
+      text: `Check out this post: ${post.title || 'FutureBlog Post'}`,
+      url: shareUrl,
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+        return
+      }
+
+      await navigator.clipboard.writeText(shareUrl)
+      setShareFeedback('Copied')
+    } catch (error) {
+      if (!navigator.share) {
+        setShareFeedback('Failed')
+      }
+    } finally {
+      if (!navigator.share) {
+        setTimeout(() => setShareFeedback(''), 1800)
+      }
+    }
   }
 
   return (
@@ -207,6 +245,17 @@ const PostCard = ({ post, onLike, onDelete, onExternalClick, showActions = false
                 </motion.button>
               </Link>
             )}
+
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleShare}
+              className="flex items-center space-x-2 text-emerald-400 hover:text-emerald-300"
+              title="Share post"
+            >
+              <Share2 size={20} />
+              <span>{shareFeedback || 'Share'}</span>
+            </motion.button>
           </div>
 
           {showActions && isOwner && !isExternal && (

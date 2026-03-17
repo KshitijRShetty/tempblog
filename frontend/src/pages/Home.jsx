@@ -127,8 +127,16 @@ const Home = () => {
   const handleLike = async (postId) => {
     try {
       const response = await api.post(`/posts/${postId}/like`)
-      setPosts(posts.map(post => 
-        post.id === postId ? response.data.post : post
+      const updatedLikes = response.data.post?.likes
+      setPosts((prevPosts) => prevPosts.map((post) =>
+        post.id === postId
+          ? { ...post, likes: updatedLikes ?? post.likes }
+          : post
+      ))
+      setAllPosts((prevPosts) => prevPosts.map((post) =>
+        post.id === postId
+          ? { ...post, likes: updatedLikes ?? post.likes }
+          : post
       ))
       
       // Update liked status
