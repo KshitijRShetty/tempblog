@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Heart, ArrowLeft, Loader2 } from 'lucide-react'
+import { Heart, ArrowLeft, Loader2, Share2 } from 'lucide-react'
 import api from '../api/axios'
 import CommentSection from '../components/CommentSection'
 import ImageCarousel from '../components/ImageCarousel'
@@ -13,6 +13,7 @@ const PostDetail = () => {
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [isLiked, setIsLiked] = useState(false)
+  const [shareFeedback, setShareFeedback] = useState('')
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
@@ -71,7 +72,12 @@ const PostDetail = () => {
   const handleLike = async () => {
     try {
       const response = await api.post(`/posts/${id}/like`)
-      setPost(response.data.post)
+      const updatedLikes = response.data.post?.likes
+      setPost((prevPost) => (
+        prevPost
+          ? { ...prevPost, likes: updatedLikes ?? prevPost.likes }
+          : response.data.post
+      ))
       setIsLiked(response.data.liked)
     } catch (error) {
       console.error('Error liking post:', error)
@@ -81,6 +87,33 @@ const PostDetail = () => {
 
   const handleCommentAdded = (newComment) => {
     setComments([...comments, newComment])
+  }
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/post/${post.id}`
+    const shareData = {
+      title: post.title || 'FutureBlog Post',
+      text: `Check out this post: ${post.title || 'FutureBlog Post'}`,
+      url: shareUrl,
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+        return
+      }
+
+      await navigator.clipboard.writeText(shareUrl)
+      setShareFeedback('Copied')
+    } catch (error) {
+      if (!navigator.share) {
+        setShareFeedback('Failed')
+      }
+    } finally {
+      if (!navigator.share) {
+        setTimeout(() => setShareFeedback(''), 1800)
+      }
+    }
   }
 
   const formatDate = (dateString) => {
@@ -153,20 +186,32 @@ const PostDetail = () => {
             {post.content}
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleLike}
-            disabled={!isAuthenticated}
-            className={`flex items-center space-x-2 px-6 py-3 bg-gradient-to-r rounded-lg text-white font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
-              isLiked 
-                ? 'from-pink-600 to-purple-700 hover:shadow-pink-600/50' 
-                : 'from-pink-500 to-purple-600 hover:shadow-pink-500/50'
-            }`}
-          >
-            <Heart size={20} fill={isLiked ? 'currentColor' : 'none'} />
-            <span>{post.likes || 0} {isLiked ? 'Liked' : 'Likes'}</span>
-          </motion.button>
+          <div className="flex flex-wrap gap-3">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleLike}
+              disabled={!isAuthenticated}
+              className={`flex items-center space-x-2 px-6 py-3 bg-gradient-to-r rounded-lg text-white font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                isLiked
+                  ? 'from-pink-600 to-purple-700 hover:shadow-pink-600/50'
+                  : 'from-pink-500 to-purple-600 hover:shadow-pink-500/50'
+              }`}
+            >
+              <Heart size={20} fill={isLiked ? 'currentColor' : 'none'} />
+              <span>{post.likes || 0} {isLiked ? 'Liked' : 'Likes'}</span>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleShare}
+              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-white font-semibold hover:shadow-lg hover:shadow-emerald-500/50 transition"
+            >
+              <Share2 size={20} />
+              <span>{shareFeedback || 'Share'}</span>
+            </motion.button>
+          </div>
 
           <div className="mt-8">
             <CommentSection 
